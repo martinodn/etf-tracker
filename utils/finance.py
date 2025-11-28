@@ -9,7 +9,7 @@ def search_by_isin(isin):
     """
     url = f"https://query2.finance.yahoo.com/v1/finance/search?q={isin}"
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     
     try:
@@ -80,10 +80,19 @@ def get_etf_data(ticker_symbol, period="1y", change_period="1d"):
             
             # Try to get the long name
             try:
+                # First try .info (might fail on cloud)
                 ticker_info = ticker.info
                 long_name = ticker_info.get('longName', current_symbol)
             except:
-                long_name = current_symbol
+                # Fallback: Use Search API to get the name
+                try:
+                    search_results = search_by_isin(current_symbol)
+                    if search_results:
+                        long_name = search_results[0]['longname']
+                    else:
+                        long_name = current_symbol
+                except:
+                    long_name = current_symbol
             
             return {
                 'symbol': current_symbol, # Return the working symbol
