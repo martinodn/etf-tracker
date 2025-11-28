@@ -191,9 +191,9 @@ def calculate_historical_performance(portfolio_df, price_history_df):
     # Iterate through each day in price history
     for date in price_history_df.index:
         # Filter transactions up to this date
-        # We use date + 1 day to include transactions made on that specific day
-        # (assuming price history is EOD and transaction happened during day)
-        mask = portfolio_df['Date'] <= date
+        # Convert date to Timestamp to ensure compatible comparison
+        date_ts = pd.Timestamp(date)
+        mask = portfolio_df['Date'] <= date_ts
         current_transactions = portfolio_df[mask]
         
         if current_transactions.empty:
