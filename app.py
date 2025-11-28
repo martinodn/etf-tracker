@@ -150,9 +150,66 @@ with tab1:
         existing_cols = [c for c in cols if c in display_df.columns]
         display_df = display_df[existing_cols]
 
-        st.subheader("Transaction History")
-        st.dataframe(display_df, width='stretch')
+
+
+        with st.expander("📜 Transaction History", expanded=False):
+            st.dataframe(display_df, width='stretch')
         
+        st.divider()
+
+        # --- Daily Absolute Gain/Loss Chart ---
+        st.subheader("💶 Daily Absolute Gain/Loss")
+        
+        try:
+            # Ensure Date column is datetime
+            port_df['Date'] = pd.to_datetime(port_df['Date'])
+            first_purchase_date = port_df['Date'].min()
+            
+            # Fetch raw historical prices for all tickers from the very first purchase
+            all_tickers = port_df['Ticker'].unique().tolist()
+            raw_history = finance.get_historical_prices(all_tickers, first_purchase_date)
+            
+            # Calculate historical performance
+            hist_perf = portfolio.calculate_historical_performance(port_df, raw_history)
+            
+            if not hist_perf.empty:
+                # Create Area Chart for Gain/Loss
+                fig_gl = go.Figure()
+                
+                # Color green if positive, red if negative (fill)
+                # Plotly doesn't support conditional fill easily in one trace, 
+                # but we can just use a standard color or a gradient.
+                # Let's use a simple area chart.
+                
+                fig_gl.add_trace(go.Scatter(
+                    x=hist_perf.index,
+                    y=hist_perf['Gain/Loss'],
+                    fill='tozeroy',
+                    mode='lines',
+                    name='Gain/Loss (€)',
+                    line=dict(color='#00CC96') # Green-ish
+                ))
+                
+                fig_gl.update_layout(
+                    title="Total Portfolio Gain/Loss (€)",
+                    xaxis_title="Date",
+                    yaxis_title="Gain/Loss (€)",
+                    hovermode="x unified",
+                    height=400,
+                    margin=dict(l=0, r=0, t=30, b=0)
+                )
+                st.plotly_chart(fig_gl, config={'responsive': True})
+                
+                # Show current metrics from history to verify
+                last_day = hist_perf.iloc[-1]
+                st.metric("Current Absolute Gain/Loss", f"€ {last_day['Gain/Loss']:,.2f}")
+                
+            else:
+                st.warning("Not enough data to calculate historical performance.")
+                
+        except Exception as e:
+            st.error(f"Error calculating historical performance: {e}")
+
         st.divider()
 
         # Comparative Chart

@@ -169,3 +169,66 @@ def calculate_performance(portfolio_df, current_prices):
         })
         
     return pd.DataFrame(summary)
+
+def calculate_historical_performance(portfolio_df, price_history_df):
+    """
+    Calculates daily absolute gain/loss history.
+    portfolio_df: DataFrame with transactions
+    price_history_df: DataFrame with daily close prices for all tickers (index=Date)
+    """
+    if portfolio_df.empty or price_history_df.empty:
+        return pd.DataFrame()
+        
+    # Ensure Date is datetime
+    portfolio_df = portfolio_df.copy()
+    portfolio_df['Date'] = pd.to_datetime(portfolio_df['Date'])
+    
+    # Sort transactions by date
+    portfolio_df = portfolio_df.sort_values('Date')
+    
+    daily_stats = []
+    
+    # Iterate through each day in price history
+    for date in price_history_df.index:
+        # Filter transactions up to this date
+        # We use date + 1 day to include transactions made on that specific day
+        # (assuming price history is EOD and transaction happened during day)
+        mask = portfolio_df['Date'] <= date
+        current_transactions = portfolio_df[mask]
+        
+        if current_transactions.empty:
+            continue
+            
+        # Calculate holdings and invested value
+        holdings = {}
+        invested_value = 0.0
+        
+        for _, row in current_transactions.iterrows():
+            ticker = row['Ticker']
+            qty = row['Quantity']
+            price = row['Price']
+            
+            holdings[ticker] = holdings.get(ticker, 0) + qty
+            invested_value += (price * qty)
+            
+        # Calculate current market value
+        current_market_value = 0.0
+        for ticker, qty in holdings.items():
+            if ticker in price_history_df.columns:
+                # Get price for this date
+                # If NaN (e.g. holiday for this specific ticker?), use 0 or prev?
+                # yfinance usually aligns dates.
+                daily_price = price_history_df.loc[date, ticker]
+                if pd.notnull(daily_price):
+                    current_market_value += (qty * daily_price)
+        
+        gain_loss = current_market_value - invested_value
+        
+        daily_stats.append({
+            'Date': date,
+            'Invested Value': invested_value,
+            'Market Value': current_market_value,
+            'Gain/Loss': gain_loss
+        })
+        
+    return pd.DataFrame(daily_stats).set_index('Date')

@@ -167,3 +167,42 @@ def get_comparative_data(tickers, start_date):
             print(f"Could not fetch history for {ticker_symbol}")
 
     return pd.DataFrame(data)
+
+def get_historical_prices(tickers, start_date):
+    """
+    Fetches raw historical closing prices for a list of tickers from a start date.
+    Returns a DataFrame where columns are tickers and values are Close prices.
+    """
+    if not tickers:
+        return pd.DataFrame()
+    
+    data = {}
+    
+    for ticker_symbol in tickers:
+        # Resolution logic (same as above)
+        suffixes_to_try = ["", ".DE", ".MI", ".L", ".PA", ".AS"]
+        found = False
+        
+        for suffix in suffixes_to_try:
+            if "." in ticker_symbol and suffix == "":
+                 current_symbol = ticker_symbol
+            elif "." in ticker_symbol:
+                 continue
+            else:
+                 current_symbol = f"{ticker_symbol}{suffix}"
+            
+            try:
+                t = yf.Ticker(current_symbol)
+                hist = t.history(start=start_date)
+                
+                if not hist.empty:
+                    data[ticker_symbol] = hist['Close']
+                    found = True
+                    break
+            except:
+                continue
+        
+        if not found:
+            print(f"Could not fetch history for {ticker_symbol}")
+
+    return pd.DataFrame(data)
