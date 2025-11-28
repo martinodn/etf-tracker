@@ -34,30 +34,34 @@ def search_by_isin(isin):
 
 @st.cache_data(ttl=3600*24) # Cache for 24 hours
 def get_etf_name(symbol):
-    """Fetches and caches the ETF name to avoid repeated API calls."""
+    """
+    Fetches and caches the ETF name.
+    Raises Exception if fetching fails, so Streamlit DOES NOT cache the failure.
+    """
     try:
         ticker = yf.Ticker(symbol)
         # First try .info
-        return ticker.info.get('longName', symbol)
+        name = ticker.info.get('longName')
+        if name:
+            return name
     except:
-        # Fallback: Use Search API
-        try:
-            search_results = search_by_isin(symbol)
-            if search_results:
-                return search_results[0]['longname']
-        except:
-            pass
-    return symbol
+        pass
+        
+    # Fallback: Use Search API
+    try:
+        search_results = search_by_isin(symbol)
+        if search_results:
+            return search_results[0]['longname']
+    except:
+        pass
+        
+    # If we are here, we failed to get the name.
+    # Raise error to prevent caching the failure.
+    raise ValueError(f"Could not fetch name for {symbol}")
 
 def get_etf_data(ticker_symbol, period="1y", change_period="1d"):
     """
     Fetches current data and historical history for a given ticker.
-    Tries to append common suffixes if the raw ticker fails.
-    
-    Args:
-        ticker_symbol: The ticker to fetch
-        period: Historical data period for chart (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max)
-        change_period: Period for calculating percentage change (1d, 1mo, 3mo, 6mo, 1y)
     """
     suffixes_to_try = ["", ".DE", ".MI", ".L", ".PA", ".AS"]
     
@@ -67,19 +71,17 @@ def get_etf_data(ticker_symbol, period="1y", change_period="1d"):
             ticker = yf.Ticker(current_symbol)
             
             # Try to get info/price to verify validity
-            # fast_info is usually reliable for checking existence
             try:
                 info = ticker.fast_info
                 current_price = info.last_price
                 if current_price is None:
                     raise ValueError("No price data")
             except:
-                # If fast_info fails, try history
                 hist_check = ticker.history(period="1d")
                 if hist_check.empty:
-                    continue # Try next suffix
+                    continue 
                 current_price = hist_check['Close'].iloc[-1]
-                info = ticker.fast_info # Still needed for currency if possible
+                info = ticker.fast_info
 
             # Get history for the change period
             change_hist = ticker.history(period=change_period)
@@ -88,7 +90,6 @@ def get_etf_data(ticker_symbol, period="1y", change_period="1d"):
                 change = current_price - previous_price
                 pct_change = (change / previous_price) * 100 if previous_price else 0
             else:
-                # Fallback to previous close if change_period fails
                 previous_close = info.previous_close
                 change = current_price - previous_close if current_price and previous_close else 0
                 pct_change = (change / previous_close) * 100 if previous_close else 0
@@ -96,11 +97,14 @@ def get_etf_data(ticker_symbol, period="1y", change_period="1d"):
             # Get history for charts
             history = ticker.history(period=period)
             
-            # Get cached name
-            long_name = get_etf_name(current_symbol)
+            # Get cached name (handle failure gracefully)
+            try:
+                long_name = get_etf_name(current_symbol)
+            except:
+                long_name = current_symbol # Fallback for display, but NOT cached
             
             return {
-                'symbol': current_symbol, # Return the working symbol
+                'symbol': current_symbol,
                 'name': long_name,
                 'current_price': current_price,
                 'change': change,
@@ -110,7 +114,7 @@ def get_etf_data(ticker_symbol, period="1y", change_period="1d"):
             }
             
         except Exception:
-            continue # Try next suffix
+            continue
 
     print(f"Error fetching data for {ticker_symbol}: All suffixes failed.")
     return None
