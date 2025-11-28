@@ -1,3 +1,4 @@
+
 # ETF Tracker & Portfolio 📈
 
 A Streamlit application to track ETF values, visualize historical data, and manage a personal portfolio.
@@ -29,3 +30,4 @@ A Streamlit application to track ETF values, visualize historical data, and mana
     ```bash
     streamlit run app.py
     ```
+
