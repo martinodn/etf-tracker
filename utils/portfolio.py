@@ -179,9 +179,9 @@ def calculate_historical_performance(portfolio_df, price_history_df):
     if portfolio_df.empty or price_history_df.empty:
         return pd.DataFrame()
         
-    # Ensure Date is datetime
+    # Ensure Date is datetime and normalize (remove time/tz)
     portfolio_df = portfolio_df.copy()
-    portfolio_df['Date'] = pd.to_datetime(portfolio_df['Date'])
+    portfolio_df['Date'] = pd.to_datetime(portfolio_df['Date']).dt.normalize()
     
     # Sort transactions by date
     portfolio_df = portfolio_df.sort_values('Date')
@@ -190,10 +190,9 @@ def calculate_historical_performance(portfolio_df, price_history_df):
     
     # Iterate through each day in price history
     for date in price_history_df.index:
-        # Filter transactions up to this date
-        # Convert date to Timestamp to ensure compatible comparison
-        date_ts = pd.Timestamp(date)
-        mask = portfolio_df['Date'] <= date_ts
+        # Normalize the date from index to ensure compatible comparison
+        date_normalized = pd.Timestamp(date).normalize()
+        mask = portfolio_df['Date'] <= date_normalized
         current_transactions = portfolio_df[mask]
         
         if current_transactions.empty:
