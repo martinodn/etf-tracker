@@ -1,6 +1,7 @@
 import requests
 import yfinance as yf
 import pandas as pd
+import streamlit as st
 
 def search_by_isin(isin):
     """
@@ -30,6 +31,23 @@ def search_by_isin(isin):
     except Exception as e:
         print(f"Error searching ISIN {isin}: {e}")
         return []
+
+@st.cache_data(ttl=3600*24) # Cache for 24 hours
+def get_etf_name(symbol):
+    """Fetches and caches the ETF name to avoid repeated API calls."""
+    try:
+        ticker = yf.Ticker(symbol)
+        # First try .info
+        return ticker.info.get('longName', symbol)
+    except:
+        # Fallback: Use Search API
+        try:
+            search_results = search_by_isin(symbol)
+            if search_results:
+                return search_results[0]['longname']
+        except:
+            pass
+    return symbol
 
 def get_etf_data(ticker_symbol, period="1y", change_period="1d"):
     """
@@ -78,21 +96,8 @@ def get_etf_data(ticker_symbol, period="1y", change_period="1d"):
             # Get history for charts
             history = ticker.history(period=period)
             
-            # Try to get the long name
-            try:
-                # First try .info (might fail on cloud)
-                ticker_info = ticker.info
-                long_name = ticker_info.get('longName', current_symbol)
-            except:
-                # Fallback: Use Search API to get the name
-                try:
-                    search_results = search_by_isin(current_symbol)
-                    if search_results:
-                        long_name = search_results[0]['longname']
-                    else:
-                        long_name = current_symbol
-                except:
-                    long_name = current_symbol
+            # Get cached name
+            long_name = get_etf_name(current_symbol)
             
             return {
                 'symbol': current_symbol, # Return the working symbol
