@@ -152,9 +152,49 @@ with tab1:
 
 
 
+
         with st.expander("📜 Transaction History", expanded=False):
             st.dataframe(display_df, width='stretch')
         
+        st.divider()
+
+        # Calculate Performance
+        perf_df = portfolio.calculate_performance(port_df, current_prices)
+        
+        if not perf_df.empty:
+            st.subheader("Portfolio Performance")
+            
+            # Overall Metrics
+            total_invested = perf_df['Invested Value'].sum()
+            total_value = perf_df['Current Value'].sum()
+            total_gain = total_value - total_invested
+            total_gain_pct = (total_gain / total_invested) * 100 if total_invested != 0 else 0
+            
+            m1, m2, m3 = st.columns(3)
+            m1.metric("Total Value", f"€ {total_value:,.2f}")
+            m2.metric("Invested", f"€ {total_invested:,.2f}")
+            m3.metric("Total Gain/Loss", f"€ {total_gain:,.2f}", f"{total_gain_pct:.2f}%")
+            
+            # Detailed Table
+            st.dataframe(
+                perf_df,
+                width='stretch',
+                column_config={
+                    "Gain/Loss %": st.column_config.NumberColumn(
+                        "Gain/Loss %",
+                        format="%.2f%%"
+                    ),
+                    "Current Value": st.column_config.NumberColumn(
+                        "Current Value",
+                        format="€ %.2f"
+                    ),
+                     "Invested Value": st.column_config.NumberColumn(
+                        "Invested",
+                        format="€ %.2f"
+                    )
+                }
+            )
+
         st.divider()
 
         # --- Daily Absolute Gain/Loss Chart ---
@@ -254,45 +294,6 @@ with tab1:
                 
         except Exception as e:
             st.error(f"Error generating chart: {e}")
-
-        st.divider()
-        
-        # Calculate Performance
-        perf_df = portfolio.calculate_performance(port_df, current_prices)
-        
-        if not perf_df.empty:
-            st.subheader("Portfolio Performance")
-            
-            # Overall Metrics
-            total_invested = perf_df['Invested Value'].sum()
-            total_value = perf_df['Current Value'].sum()
-            total_gain = total_value - total_invested
-            total_gain_pct = (total_gain / total_invested) * 100 if total_invested != 0 else 0
-            
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Total Value", f"€ {total_value:,.2f}")
-            m2.metric("Invested", f"€ {total_invested:,.2f}")
-            m3.metric("Total Gain/Loss", f"€ {total_gain:,.2f}", f"{total_gain_pct:.2f}%")
-            
-            # Detailed Table
-            st.dataframe(
-                perf_df,
-                width='stretch',
-                column_config={
-                    "Gain/Loss %": st.column_config.NumberColumn(
-                        "Gain/Loss %",
-                        format="%.2f%%"
-                    ),
-                    "Current Value": st.column_config.NumberColumn(
-                        "Current Value",
-                        format="€ %.2f"
-                    ),
-                     "Invested Value": st.column_config.NumberColumn(
-                        "Invested",
-                        format="€ %.2f"
-                    )
-                }
-            )
     else:
         st.info("No transactions recorded.")
 
