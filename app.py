@@ -135,10 +135,13 @@ with tab1:
         for t in all_tickers:
              d = finance.get_etf_data(t)
              if d:
-                 current_prices[t] = d['current_price']
-                 ticker_names[t] = d['name']
+                 current_prices[t] = d.get('current_price', 0)
+                 # Always ensure we have a name entry, fallback to ticker if name is missing
+                 ticker_names[t] = d.get('name', t)
              else:
-                 ticker_names[t] = t # Fallback to ticker if no data
+                 # If get_etf_data fails completely, use ticker as fallback
+                 current_prices[t] = 0
+                 ticker_names[t] = t
 
         # Prepare display dataframe with Name
         display_df = port_df.copy()
@@ -186,6 +189,15 @@ with tab1:
             
             # Detailed Table - Sort by Annualized Return % descending
             perf_df_sorted = perf_df.sort_values('Annualized Return %', ascending=False)
+            
+            # Add Name column for better readability
+            perf_df_sorted = perf_df_sorted.copy()
+            perf_df_sorted.insert(0, 'Name', perf_df_sorted['Ticker'].map(ticker_names))
+            
+            # Reorder columns to show Name, Ticker, then other metrics
+            cols = ['Name', 'Ticker', 'Quantity', 'Buy Price', 'Current Price', 
+                    'Invested Value', 'Current Value', 'Gain/Loss', 'Gain/Loss %', 'Annualized Return %']
+            perf_df_sorted = perf_df_sorted[cols]
             
             st.dataframe(
                 perf_df_sorted,
