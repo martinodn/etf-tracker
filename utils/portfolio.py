@@ -129,13 +129,18 @@ def add_transaction(date, isin, ticker, price, quantity):
     save_portfolio(df)
     return df
 
-def calculate_performance(portfolio_df, current_prices):
+def calculate_performance(portfolio_df, current_prices, price_history_df=None):
     """
     Calculates performance metrics for the portfolio.
     current_prices: dict {ticker: price}
+    price_history_df: DataFrame with historical prices (optional, for annualized return calculation)
     """
     if portfolio_df.empty:
         return pd.DataFrame()
+    
+    # Ensure Date column is datetime
+    portfolio_df = portfolio_df.copy()
+    portfolio_df['Date'] = pd.to_datetime(portfolio_df['Date'])
     
     # Group by Ticker to get weighted average price and total quantity
     summary = []
@@ -149,6 +154,10 @@ def calculate_performance(portfolio_df, current_prices):
         # (Price * Quantity).sum() / Total Quantity
         avg_price = (group['Price'] * group['Quantity']).sum() / total_qty
         
+        # Get first purchase date for this ticker
+        first_purchase_date = group['Date'].min()
+        days_held = (pd.Timestamp.now() - first_purchase_date).days
+        
         current_price = current_prices.get(ticker, 0)
         
         current_value = total_qty * current_price
@@ -156,6 +165,35 @@ def calculate_performance(portfolio_df, current_prices):
         
         gain_loss = current_value - invested_value
         gain_loss_pct = (gain_loss / invested_value) * 100 if invested_value != 0 else 0
+        
+        # Calculate annualized return
+        annualized_return = 0.0
+        if days_held > 0:
+            if days_held < 365:
+                # Simple linear annualization: (return / days) * 365
+                if invested_value != 0:
+                    current_return_pct = ((current_value / invested_value) - 1) * 100
+                    annualized_return = (current_return_pct / days_held) * 365
+            else:
+                # Calculate return over last 365 days
+                if price_history_df is not None and ticker in price_history_df.columns:
+                    try:
+                        # Get price 365 days ago
+                        one_year_ago = pd.Timestamp.now() - pd.Timedelta(days=365)
+                        
+                        # Find the closest date in history
+                        available_dates = price_history_df.index[price_history_df.index >= one_year_ago]
+                        if len(available_dates) > 0:
+                            closest_date = available_dates[0]
+                            price_365_days_ago = price_history_df.loc[closest_date, ticker]
+                            
+                            if pd.notnull(price_365_days_ago) and price_365_days_ago > 0:
+                                annualized_return = ((current_price / price_365_days_ago) - 1) * 100
+                    except Exception:
+                        # Fallback to annualizing current return if historical data fails
+                        if invested_value != 0:
+                            total_return = current_value / invested_value
+                            annualized_return = (total_return ** (365 / days_held) - 1) * 100
         
         summary.append({
             'Ticker': ticker,
@@ -165,7 +203,8 @@ def calculate_performance(portfolio_df, current_prices):
             'Invested Value': invested_value,
             'Current Value': current_value,
             'Gain/Loss': gain_loss,
-            'Gain/Loss %': gain_loss_pct
+            'Gain/Loss %': gain_loss_pct,
+            'Annualized Return %': annualized_return
         })
         
     return pd.DataFrame(summary)
@@ -185,6 +224,9 @@ def calculate_historical_performance(portfolio_df, price_history_df):
     
     # Sort transactions by date
     portfolio_df = portfolio_df.sort_values('Date')
+    
+    # Forward-fill missing prices to handle gaps (holidays, data issues)
+    price_history_df = price_history_df.fillna(method='ffill')
     
     daily_stats = []
     
@@ -214,12 +256,12 @@ def calculate_historical_performance(portfolio_df, price_history_df):
         current_market_value = 0.0
         for ticker, qty in holdings.items():
             if ticker in price_history_df.columns:
-                # Get price for this date
-                # If NaN (e.g. holiday for this specific ticker?), use 0 or prev?
-                # yfinance usually aligns dates.
+                # Get price for this date (now forward-filled, so should rarely be NaN)
                 daily_price = price_history_df.loc[date, ticker]
                 if pd.notnull(daily_price):
                     current_market_value += (qty * daily_price)
+                # If still NaN after forward-fill, skip this ticker for this day
+                # (this would only happen if no prior data exists)
         
         gain_loss = current_market_value - invested_value
         

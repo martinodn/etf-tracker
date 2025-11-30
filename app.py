@@ -159,7 +159,16 @@ with tab1:
         st.divider()
 
         # Calculate Performance
-        perf_df = portfolio.calculate_performance(port_df, current_prices)
+        # Fetch historical data for annualized return calculation
+        try:
+            port_df['Date'] = pd.to_datetime(port_df['Date'])
+            first_purchase_date = port_df['Date'].min()
+            all_tickers = port_df['Ticker'].unique().tolist()
+            raw_history = finance.get_historical_prices(all_tickers, first_purchase_date)
+        except Exception:
+            raw_history = pd.DataFrame()
+        
+        perf_df = portfolio.calculate_performance(port_df, current_prices, raw_history)
         
         if not perf_df.empty:
             st.subheader("Portfolio Performance")
@@ -175,14 +184,21 @@ with tab1:
             m2.metric("Invested", f"€ {total_invested:,.2f}")
             m3.metric("Total Gain/Loss", f"€ {total_gain:,.2f}", f"{total_gain_pct:.2f}%")
             
-            # Detailed Table
+            # Detailed Table - Sort by Annualized Return % descending
+            perf_df_sorted = perf_df.sort_values('Annualized Return %', ascending=False)
+            
             st.dataframe(
-                perf_df,
+                perf_df_sorted,
                 width='stretch',
                 column_config={
                     "Gain/Loss %": st.column_config.NumberColumn(
                         "Gain/Loss %",
                         format="%.2f%%"
+                    ),
+                    "Annualized Return %": st.column_config.NumberColumn(
+                        "Annualized Return %",
+                        format="%.2f%%",
+                        help="Projected annual return (if held <1yr) or actual 1-year return (if held ≥1yr)"
                     ),
                     "Current Value": st.column_config.NumberColumn(
                         "Current Value",
@@ -277,7 +293,8 @@ with tab1:
                         x=comp_data.index,
                         y=comp_data[column],
                         mode='lines',
-                        name=column
+                        name=column,
+                        hovertemplate='%{y:.2f}%<extra></extra>'
                     ))
                 
                 fig.update_layout(
